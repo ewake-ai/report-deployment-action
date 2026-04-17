@@ -1,0 +1,86 @@
+name: Report Deployment
+description: Report a deployment event to Ewake. Always exits 0 — never blocks the pipeline.
+branding:
+  icon: 'send'
+  color: 'blue'
+
+inputs:
+  api-key:
+    description: Ewake API key for authentication
+    required: true
+  artifact-name:
+    description: Name of the deployed artifact (e.g., reactive, orchestrator, lambdas)
+    required: true
+  api-url:
+    description: Ewake API base URL
+    required: false
+    default: 'https://api.ewake.ai'
+  version:
+    description: Version or tag of the deployed artifact
+    required: false
+    default: ''
+  message:
+    description: Deployment message
+    required: false
+    default: ''
+  labels:
+    description: JSON object of key-value labels
+    required: false
+    default: '{}'
+
+runs:
+  using: composite
+  steps:
+    - name: Report deployment event
+      shell: bash
+      env:
+        API_KEY: ${{ inputs.api-key }}
+        ARTIFACT_NAME: ${{ inputs.artifact-name }}
+        API_URL: ${{ inputs.api-url }}
+        VERSION: ${{ inputs.version }}
+        MESSAGE: ${{ inputs.message }}
+        LABELS: ${{ inputs.labels }}
+      run: |
+        TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        RESPONSE_FILE=$(mktemp)
+
+        PAYLOAD=$(jq -n \
+          --arg timestamp "$TIMESTAMP" \
+          --arg repository "$GITHUB_REPOSITORY" \
+          --arg artifactName "$ARTIFACT_NAME" \
+          --arg commitSha "$GITHUB_SHA" \
+          --arg version "$VERSION" \
+          --arg source "github-actions" \
+          --arg url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+          --arg message "$MESSAGE" \
+          --argjson labels "$LABELS" \
+          '{
+            timestamp: $timestamp,
+            repository: $repository,
+            artifactName: $artifactName,
+            commitSha: $commitSha,
+            source: $source,
+            url: $url,
+            labels: $labels
+          }
+          | if $version != "" then .version = $version else . end
+          | if $message != "" then .message = $message else . end')
+
+        HTTP_STATUS=$(curl -s -o "$RESPONSE_FILE" -w "%{http_code}" \
+          -X POST "${API_URL}/api/v1/events/deployment" \
+          -H "Authorization: Bearer ${API_KEY}" \
+          -H "Content-Type: application/json" \
+          -d "$PAYLOAD" \
+          --max-time 10) || true
+
+        if [ "$HTTP_STATUS" = "202" ]; then
+          TRACE_ID=$(jq -r '.traceId // "unknown"' "$RESPONSE_FILE")
+          echo "Deployment event reported (traceId: $TRACE_ID)"
+        else
+        echo "::warning::Failed to report deployment event (HTTP {$HTTP_STATUS:-000})"
+          cat "$RESPONSE_FILE" 2>/dev/null || true
+        fi
+
+        rm -f "$RESPONSE_FILE"
+        exit 0
+
