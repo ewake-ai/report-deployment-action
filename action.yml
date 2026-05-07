@@ -47,6 +47,7 @@ runs:
         PAYLOAD=$(jq -n \
           --arg timestamp "$TIMESTAMP" \
           --arg repository "$GITHUB_REPOSITORY" \
+          --arg repositoryUrl "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
           --arg artifactName "$ARTIFACT_NAME" \
           --arg commitSha "$GITHUB_SHA" \
           --arg version "$VERSION" \
@@ -57,6 +58,7 @@ runs:
           '{
             timestamp: $timestamp,
             repository: $repository,
+            repositoryUrl: $repositoryUrl,
             artifactName: $artifactName,
             commitSha: $commitSha,
             source: $source,
