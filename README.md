@@ -32,6 +32,7 @@ That's it. The action picks up `repository`, `commitSha`, and `timestamp` from t
 The following fields are populated automatically from the GitHub Actions context and cannot be overridden:
 
 - `repository` — from `github.repository`
+- `repositoryUrl` — from `github.server_url` + `github.repository`
 - `commitSha` — from `github.sha`
 - `timestamp` — current time at execution
 - `source` — always `github-actions`
